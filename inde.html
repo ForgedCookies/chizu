@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>China City Travel Map</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111}body{overflow:hidden;background:#fff}
+.app{display:grid;grid-template-columns:290px 1fr;height:100vh}.side{border-right:1px solid #ddd;padding:22px 18px;background:#fff;z-index:3}.side h1{font-size:21px;line-height:1.15;margin:0 0 8px}.sub{font-size:13px;line-height:1.5;color:#666;margin-bottom:18px}.search{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit}.legend{margin-top:18px;padding-top:15px;border-top:1px solid #eee;font-size:13px}.row{display:flex;align-items:center;gap:8px;margin:9px 0}.dot{width:15px;height:15px;border-radius:3px;border:1px solid #999}.visited{background:#4C78A8}.passed{background:#F2C14E}.lived{background:#E45756}.stats{border-top:1px solid #eee;margin-top:18px;padding-top:14px;font-size:13px}.stat{display:flex;justify-content:space-between;padding:4px 0}.hint{font-size:11px;color:#777;line-height:1.5;margin-top:18px}.map{position:relative;min-width:0}.map svg{width:100%;height:100%;display:block;cursor:grab}.map svg.dragging{cursor:grabbing}.city{fill:#fff;stroke:#111;stroke-width:.7;vector-effect:non-scaling-stroke}.city:hover{fill:#f0f0f0}.city.status-visited{fill:#4C78A8}.city.status-passed{fill:#F2C14E}.city.status-lived{fill:#E45756}.label{font-size:8px;text-anchor:middle;fill:#111;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}.note{position:absolute;top:14px;right:15px;border:1px solid #ddd;background:rgba(255,255,255,.95);border-radius:7px;padding:7px 9px;font-size:11px;color:#666}.popup{position:absolute;width:220px;background:#fff;border:1px solid #aaa;border-radius:11px;padding:13px;box-shadow:0 10px 30px #0002;z-index:5}.popup.hidden{display:none}.popup h2{font-size:16px;margin:0 0 3px}.code{font-size:10px;color:#888;margin-bottom:10px}.popup button{width:100%;border:0;border-radius:7px;padding:9px;margin:3px 0;text-align:left;font:inherit;font-size:13px;cursor:pointer}.popup button[data-status=visited]{background:#e4ebf3}.popup button[data-status=passed]{background:#fff4ce}.popup button[data-status=lived]{background:#f7dfdf}.popup .clear{background:#fff;border:1px solid #ddd;color:#777}.loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff;z-index:10;color:#555;font-size:14px}.error{max-width:500px;text-align:center;padding:25px;line-height:1.5}.source{font-size:10px;color:#888;margin-top:16px}
+@media(max-width:700px){.app{grid-template-columns:1fr;grid-template-rows:175px 1fr}.side{border-right:0;border-bottom:1px solid #ddd;padding:14px 16px}.legend,.stats,.hint,.source{display:none}.side h1{font-size:19px}.sub{margin-bottom:8px}}
+</style></head>
+<body><div class="app">
+<aside class="side"><h1>China City Travel Map</h1><div class="sub">Click a city, then mark whether you <b>visited</b>, <b>passed through</b>, or <b>lived</b> there.</div><input id="search" class="search" placeholder="Search city…">
+<div class="legend"><div class="row"><span class="dot visited"></span>Visited</div><div class="row"><span class="dot passed"></span>Passed through</div><div class="row"><span class="dot lived"></span>Lived there</div></div>
+<div class="stats"><div class="stat"><span>Visited</span><b id="v">0</b></div><div class="stat"><span>Passed through</span><b id="p">0</b></div><div class="stat"><span>Lived there</span><b id="l">0</b></div></div><div class="hint">Selections are saved in this browser. Scroll to zoom; drag to pan.</div><div class="source">Prototype data source: GeoJSON.CN</div></aside>
+<main class="map"><div id="map"></div><div class="note">City-level boundaries · click a city</div><div id="loading" class="loading">Loading boundaries…</div><div id="popup" class="popup hidden"><h2 id="name"></h2><div id="code" class="code"></div><button data-status="visited">🔵 Visited</button><button data-status="passed">🟡 Passed through</button><button data-status="lived">🔴 Lived there</button><button class="clear" data-status="clear">Clear status</button></div></main></div>
+<script>
+const ROOT='https://geojson.cn/api/china/1.6.3/';
+const KEY='china-city-travel-status-v1';let statuses=JSON.parse(localStorage.getItem(KEY)||'{}'),features=[],svg,root,path,projection,selected;
+const $=id=>document.getElementById(id);
+function save(){localStorage.setItem(KEY,JSON.stringify(statuses));stats()}
+function stats(){let a=Object.values(statuses);$('v').textContent=a.filter(x=>x==='visited').length;$('p').textContent=a.filter(x=>x==='passed').length;$('l').textContent=a.filter(x=>x==='lived').length}
+async function get(u){let r=await fetch(u);if(!r.ok)throw Error(r.status+' '+u);return r.json()}
+async function load(){
+ const meta=await get(ROOT+'_meta.json');const country=meta.files.find(x=>String(x.code)==='100000');if(!country)throw Error('Country metadata unavailable');
+ const direct=new Set(['110000','120000','310000','500000']);const out=[];const seen=new Set();
+ for(const prov of country.children||[]){const code=String(prov.code).padStart(6,'0');const f=await get(ROOT+prov.filename+'.json');
+  if(direct.has(code)){let x=(f.features||[]).find(x=>String(x.properties?.code)===code)||f.features?.[0];if(x){x.properties={...x.properties,level:2,name:x.properties?.name||prov.name,fullname:x.properties?.fullname||prov.fullname};out.push(x);seen.add(code)}}
+  else for(const x of f.features||[]){let p=x.properties||{};if(Number(p.level)===2&&!seen.has(String(p.code))){out.push(x);seen.add(String(p.code))}}
+ }
+ // Taiwan is intentionally included if exposed by the source as a province.
+ return {type:'FeatureCollection',features:out.filter(x=>x.geometry)}
+}
+function cls(d){let s=statuses[String(d.properties.code)];return 'city'+(s?' status-'+s:'')}
+function render(data){
+ const box=$('#map'),w=box.clientWidth,h=box.clientHeight;d3.select(box).selectAll('*').remove();svg=d3.select(box).append('svg').attr('viewBox',`0 0 ${w} ${h}`);root=svg.append('g');projection=d3.geoMercator().fitExtent([[25,30],[w-25,h-30]],data);path=d3.geoPath(projection);const layer=root.append('g');
+ layer.selectAll('path').data(data.features).join('path').attr('class',cls).attr('d',path).attr('data-code',d=>d.properties.code).on('click',(e,d)=>{e.stopPropagation();openPopup(e,d)});
+ layer.selectAll('text').data(data.features).join('text').attr('class','label').attr('x',d=>path.centroid(d)[0]).attr('y',d=>path.centroid(d)[1]).text(d=>d.properties.name||'');
+ svg.call(d3.zoom().scaleExtent([.7,12]).on('start',()=>svg.classed('dragging',true)).on('end',()=>svg.classed('dragging',false)).on('zoom',e=>root.attr('transform',e.transform))).on('click',close);
+ stats()
+}
+function openPopup(e,d){selected=d;$('name').textContent=d.properties.fullname||d.properties.name||'City';$('code').textContent='Administrative code: '+d.properties.code;let r=document.querySelector('.map').getBoundingClientRect();let x=Math.min(e.clientX-r.left+12,r.width-230),y=Math.min(e.clientY-r.top+12,r.height-220);$('popup').style.left=Math.max(8,x)+'px';$('popup').style.top=Math.max(8,y)+'px';$('popup').classList.remove('hidden')}
+function close(e){if(e&&$('popup').contains(e.target))return;$('popup').classList.add('hidden');selected=null}
+$('popup').onclick=e=>{let b=e.target.closest('button');if(!b||!selected)return;let c=String(selected.properties.code),s=b.dataset.status;if(s==='clear')delete statuses[c];else statuses[c]=s;save();d3.selectAll('.city').filter(d=>String(d.properties.code)===c).attr('class',cls);close()}
+$('search').oninput=e=>{let q=e.target.value.trim().toLowerCase();d3.selectAll('.city').attr('opacity',d=>{if(!q)return 1;let p=d.properties,t=((p.name||'')+' '+(p.fullname||'')+' '+(p.pinyin||'')).toLowerCase();return t.includes(q)?1:.15})}
+window.onresize=()=>{if(features.length)render({type:'FeatureCollection',features})};
+load().then(d=>{features=d.features;render(d);$('loading').style.display='none'}).catch(err=>{$('loading').innerHTML='<div class="error"><b>Could not load the boundary data.</b><br><br>Serve this file through a local web server rather than opening it directly as file://.<br><br><small>'+err.message+'</small></div>'})
+</script></body></html>
