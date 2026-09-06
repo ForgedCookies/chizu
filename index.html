@@ -1,48 +1,238 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>China City Travel Map</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>China & Taiwan City Travel Map — Prototype</title>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#111}body{overflow:hidden;background:#fff}
-.app{display:grid;grid-template-columns:290px 1fr;height:100vh}.side{border-right:1px solid #ddd;padding:22px 18px;background:#fff;z-index:3}.side h1{font-size:21px;line-height:1.15;margin:0 0 8px}.sub{font-size:13px;line-height:1.5;color:#666;margin-bottom:18px}.search{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font:inherit}.legend{margin-top:18px;padding-top:15px;border-top:1px solid #eee;font-size:13px}.row{display:flex;align-items:center;gap:8px;margin:9px 0}.dot{width:15px;height:15px;border-radius:3px;border:1px solid #999}.visited{background:#4C78A8}.passed{background:#F2C14E}.lived{background:#E45756}.stats{border-top:1px solid #eee;margin-top:18px;padding-top:14px;font-size:13px}.stat{display:flex;justify-content:space-between;padding:4px 0}.hint{font-size:11px;color:#777;line-height:1.5;margin-top:18px}.map{position:relative;min-width:0}.map svg{width:100%;height:100%;display:block;cursor:grab}.map svg.dragging{cursor:grabbing}.city{fill:#fff;stroke:#111;stroke-width:.7;vector-effect:non-scaling-stroke}.city:hover{fill:#f0f0f0}.city.status-visited{fill:#4C78A8}.city.status-passed{fill:#F2C14E}.city.status-lived{fill:#E45756}.label{font-size:8px;text-anchor:middle;fill:#111;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}.note{position:absolute;top:14px;right:15px;border:1px solid #ddd;background:rgba(255,255,255,.95);border-radius:7px;padding:7px 9px;font-size:11px;color:#666}.popup{position:absolute;width:220px;background:#fff;border:1px solid #aaa;border-radius:11px;padding:13px;box-shadow:0 10px 30px #0002;z-index:5}.popup.hidden{display:none}.popup h2{font-size:16px;margin:0 0 3px}.code{font-size:10px;color:#888;margin-bottom:10px}.popup button{width:100%;border:0;border-radius:7px;padding:9px;margin:3px 0;text-align:left;font:inherit;font-size:13px;cursor:pointer}.popup button[data-status=visited]{background:#e4ebf3}.popup button[data-status=passed]{background:#fff4ce}.popup button[data-status=lived]{background:#f7dfdf}.popup .clear{background:#fff;border:1px solid #ddd;color:#777}.loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff;z-index:10;color:#555;font-size:14px}.error{max-width:500px;text-align:center;padding:25px;line-height:1.5}.source{font-size:10px;color:#888;margin-top:16px}
-@media(max-width:700px){.app{grid-template-columns:1fr;grid-template-rows:175px 1fr}.side{border-right:0;border-bottom:1px solid #ddd;padding:14px 16px}.legend,.stats,.hint,.source{display:none}.side h1{font-size:19px}.sub{margin-bottom:8px}}
-</style></head>
-<body><div class="app">
-<aside class="side"><h1>China City Travel Map</h1><div class="sub">Click a city, then mark whether you <b>visited</b>, <b>passed through</b>, or <b>lived</b> there.</div><input id="search" class="search" placeholder="Search city…">
-<div class="legend"><div class="row"><span class="dot visited"></span>Visited</div><div class="row"><span class="dot passed"></span>Passed through</div><div class="row"><span class="dot lived"></span>Lived there</div></div>
-<div class="stats"><div class="stat"><span>Visited</span><b id="v">0</b></div><div class="stat"><span>Passed through</span><b id="p">0</b></div><div class="stat"><span>Lived there</span><b id="l">0</b></div></div><div class="hint">Selections are saved in this browser. Scroll to zoom; drag to pan.</div><div class="source">Prototype data source: GeoJSON.CN</div></aside>
-<main class="map"><div id="map"></div><div class="note">City-level boundaries · click a city</div><div id="loading" class="loading">Loading boundaries…</div><div id="popup" class="popup hidden"><h2 id="name"></h2><div id="code" class="code"></div><button data-status="visited">🔵 Visited</button><button data-status="passed">🟡 Passed through</button><button data-status="lived">🔴 Lived there</button><button class="clear" data-status="clear">Clear status</button></div></main></div>
+:root{--ink:#111;--line:#111;--bg:#fff;--panel:#fff;--visited:#4C78A8;--passed:#F2C14E;--lived:#E45756}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+.app{height:100vh;display:grid;grid-template-columns:300px 1fr}
+aside{border-right:1px solid #ddd;padding:22px 20px;overflow:auto;background:#fff;z-index:3}
+h1{font-size:21px;line-height:1.12;margin:0 0 8px;letter-spacing:-.02em}
+.sub{font-size:12.5px;line-height:1.5;color:#666;margin-bottom:18px}
+input{width:100%;font:inherit;padding:10px 11px;border:1px solid #ccc;border-radius:8px;outline:none}
+input:focus{border-color:#111}
+.section{border-top:1px solid #eee;margin-top:17px;padding-top:15px}
+.row{display:flex;align-items:center;gap:9px;font-size:13px;margin:9px 0}
+.sw{width:15px;height:15px;border-radius:3px;border:1px solid #bbb}.v{background:var(--visited)}.p{background:var(--passed)}.l{background:var(--lived)}
+.stat{display:flex;justify-content:space-between;font-size:13px;padding:5px 0}.stat b{font-variant-numeric:tabular-nums}
+.small{font-size:11px;line-height:1.5;color:#777}
+#map{position:relative;overflow:hidden;background:#fff}
+svg{display:block;width:100%;height:100%;cursor:grab}svg.dragging{cursor:grabbing}
+.citycell{fill:#fff;stroke:#111;stroke-width:.55px;vector-effect:non-scaling-stroke;cursor:pointer}
+.citycell:hover{fill:#f2f2f2}.citycell.visited{fill:var(--visited)}.citycell.passed{fill:var(--passed)}.citycell.lived{fill:var(--lived)}
+.country{fill:#fff;stroke:#111;stroke-width:1.25px;vector-effect:non-scaling-stroke;pointer-events:none}
+.label{fill:#111;font-size:8px;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+.citydot{fill:#111;pointer-events:none}
+.note{position:absolute;right:15px;top:14px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:7px 10px;font-size:11px;color:#666;box-shadow:0 2px 12px #0000000b}
+.popup{position:absolute;width:230px;background:#fff;border:1px solid #aaa;border-radius:11px;padding:13px;box-shadow:0 10px 35px #0002;z-index:5}
+.popup.hidden{display:none}.popup h2{font-size:16px;margin:0 0 2px}.meta{font-size:10px;color:#888;margin-bottom:10px}
+.popup button{width:100%;border:0;border-radius:7px;padding:9px;margin:3px 0;font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.popup .visited{background:#e4edf6}.popup .passed{background:#fff3c9}.popup .lived{background:#f8e1e0}.popup .clear{background:#fff;border:1px solid #ddd;color:#666}
+.loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff;z-index:10;color:#555;font-size:13px}.loading.hide{display:none}
+.threshold{margin-top:10px;font-size:11px;color:#666}
+@media(max-width:760px){.app{grid-template-columns:1fr;grid-template-rows:175px 1fr}aside{border-right:0;border-bottom:1px solid #ddd;padding:15px}.section{display:none}.sub{margin-bottom:9px}h1{font-size:18px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+<h1>China & Taiwan<br>City Travel Map</h1>
+<div class="sub">A deliberately simplified, low‑poly travel map. Cities are represented by Voronoi-style cells around population centres rather than exact administrative boundaries.</div>
+<input id="search" placeholder="Search city…" autocomplete="off">
+<div class="section">
+<div class="row"><span class="sw v"></span> Visited</div>
+<div class="row"><span class="sw p"></span> Passed through</div>
+<div class="row"><span class="sw l"></span> Lived there</div>
+</div>
+<div class="section">
+<div class="stat"><span>Visited</span><b id="visited">0</b></div>
+<div class="stat"><span>Passed through</span><b id="passed">0</b></div>
+<div class="stat"><span>Lived there</span><b id="lived">0</b></div>
+<div class="stat"><span>Total marked</span><b id="total">0</b></div>
+</div>
+<div class="section small">
+<b>City threshold</b><br>
+Population ≥ 100,000
+<p>This prototype uses a static-style city population list derived from GeoNames and simplified geographic boundaries. It is intended as a visual prototype, not an authoritative administrative map.</p>
+</div>
+</aside>
+<main id="map">
+<div class="note">Click a city · scroll to zoom · drag to pan</div>
+<div id="loading" class="loading">Loading city and boundary data…</div>
+<div id="popup" class="popup hidden">
+<h2 id="pn"></h2><div id="pm" class="meta"></div>
+<button class="visited" data-s="visited">🔵 Visited</button>
+<button class="passed" data-s="passed">🟡 Passed through</button>
+<button class="lived" data-s="lived">🔴 Lived there</button>
+<button class="clear" data-s="clear">Clear status</button>
+</div>
+</main>
+</div>
 <script>
-const ROOT='https://geojson.cn/api/china/1.6.3/';
-const KEY='china-city-travel-status-v1';let statuses=JSON.parse(localStorage.getItem(KEY)||'{}'),features=[],svg,root,path,projection,selected;
-const $=id=>document.getElementById(id);
-function save(){localStorage.setItem(KEY,JSON.stringify(statuses));stats()}
-function stats(){let a=Object.values(statuses);$('v').textContent=a.filter(x=>x==='visited').length;$('p').textContent=a.filter(x=>x==='passed').length;$('l').textContent=a.filter(x=>x==='lived').length}
-async function get(u){let r=await fetch(u);if(!r.ok)throw Error(r.status+' '+u);return r.json()}
-async function load(){
- const meta=await get(ROOT+'_meta.json');const country=meta.files.find(x=>String(x.code)==='100000');if(!country)throw Error('Country metadata unavailable');
- const direct=new Set(['110000','120000','310000','500000']);const out=[];const seen=new Set();
- for(const prov of country.children||[]){const code=String(prov.code).padStart(6,'0');const f=await get(ROOT+prov.filename+'.json');
-  if(direct.has(code)){let x=(f.features||[]).find(x=>String(x.properties?.code)===code)||f.features?.[0];if(x){x.properties={...x.properties,level:2,name:x.properties?.name||prov.name,fullname:x.properties?.fullname||prov.fullname};out.push(x);seen.add(code)}}
-  else for(const x of f.features||[]){let p=x.properties||{};if(Number(p.level)===2&&!seen.has(String(p.code))){out.push(x);seen.add(String(p.code))}}
+const CITY_URL="https://gist.githubusercontent.com/curran/115407b42ef85b0758595d05c825b346/raw/geonames_cities100000.csv";
+const CN_URL="https://cdn.jsdelivr.net/npm/cn-atlas@0.1.2/nation.json";
+const TW_URL="https://raw.githubusercontent.com/dkaoster/taiwan-atlas/master/nation-10t.json";
+const STORAGE="china-city-map-v2";
+let svg,root,projection,path,zoom,cities=[],selected=null,statuses=JSON.parse(localStorage.getItem(STORAGE)||"{}");
+
+const $=x=>document.getElementById(x);
+function save(){localStorage.setItem(STORAGE,JSON.stringify(statuses));stats()}
+function stats(){let a=Object.values(statuses);$("visited").textContent=a.filter(x=>x==="visited").length;$("passed").textContent=a.filter(x=>x==="passed").length;$("lived").textContent=a.filter(x=>x==="lived").length;$("total").textContent=a.length}
+async function getText(url){let r=await fetch(url);if(!r.ok)throw Error(r.status+" "+url);return r.text()}
+async function getJSON(url){let r=await fetch(url);if(!r.ok)throw Error(r.status+" "+url);return r.json()}
+
+function pointInRing(pt,ring){
+ let x=pt[0],y=pt[1],inside=false;
+ for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+   let xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+   let hit=((yi>y)!=(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi);
+   if(hit)inside=!inside;
  }
- // Taiwan is intentionally included if exposed by the source as a province.
- return {type:'FeatureCollection',features:out.filter(x=>x.geometry)}
+ return inside;
 }
-function cls(d){let s=statuses[String(d.properties.code)];return 'city'+(s?' status-'+s:'')}
-function render(data){
- const box=$('#map'),w=box.clientWidth,h=box.clientHeight;d3.select(box).selectAll('*').remove();svg=d3.select(box).append('svg').attr('viewBox',`0 0 ${w} ${h}`);root=svg.append('g');projection=d3.geoMercator().fitExtent([[25,30],[w-25,h-30]],data);path=d3.geoPath(projection);const layer=root.append('g');
- layer.selectAll('path').data(data.features).join('path').attr('class',cls).attr('d',path).attr('data-code',d=>d.properties.code).on('click',(e,d)=>{e.stopPropagation();openPopup(e,d)});
- layer.selectAll('text').data(data.features).join('text').attr('class','label').attr('x',d=>path.centroid(d)[0]).attr('y',d=>path.centroid(d)[1]).text(d=>d.properties.name||'');
- svg.call(d3.zoom().scaleExtent([.7,12]).on('start',()=>svg.classed('dragging',true)).on('end',()=>svg.classed('dragging',false)).on('zoom',e=>root.attr('transform',e.transform))).on('click',close);
- stats()
+function pointInPoly(pt,geom){
+ if(!geom)return false;
+ if(geom.type==="Polygon")return pointInRing(pt,geom.coordinates[0]);
+ if(geom.type==="MultiPolygon")return geom.coordinates.some(p=>pointInRing(pt,p[0]));
+ return false;
 }
-function openPopup(e,d){selected=d;$('name').textContent=d.properties.fullname||d.properties.name||'City';$('code').textContent='Administrative code: '+d.properties.code;let r=document.querySelector('.map').getBoundingClientRect();let x=Math.min(e.clientX-r.left+12,r.width-230),y=Math.min(e.clientY-r.top+12,r.height-220);$('popup').style.left=Math.max(8,x)+'px';$('popup').style.top=Math.max(8,y)+'px';$('popup').classList.remove('hidden')}
-function close(e){if(e&&$('popup').contains(e.target))return;$('popup').classList.add('hidden');selected=null}
-$('popup').onclick=e=>{let b=e.target.closest('button');if(!b||!selected)return;let c=String(selected.properties.code),s=b.dataset.status;if(s==='clear')delete statuses[c];else statuses[c]=s;save();d3.selectAll('.city').filter(d=>String(d.properties.code)===c).attr('class',cls);close()}
-$('search').oninput=e=>{let q=e.target.value.trim().toLowerCase();d3.selectAll('.city').attr('opacity',d=>{if(!q)return 1;let p=d.properties,t=((p.name||'')+' '+(p.fullname||'')+' '+(p.pinyin||'')).toLowerCase();return t.includes(q)?1:.15})}
-window.onresize=()=>{if(features.length)render({type:'FeatureCollection',features})};
-load().then(d=>{features=d.features;render(d);$('loading').style.display='none'}).catch(err=>{$('loading').innerHTML='<div class="error"><b>Could not load the boundary data.</b><br><br>Serve this file through a local web server rather than opening it directly as file://.<br><br><small>'+err.message+'</small></div>'})
-</script></body></html>
+function pointInFeature(pt,fc){return fc.features.some(f=>pointInPoly(pt,f.geometry))}
+
+function parseCSV(text){
+ let lines=text.trim().split(/\r?\n/); lines.shift();
+ return lines.map(line=>{
+   let v=line.split(",");
+   return {name:v[0],lat:+v[1],lng:+v[2],population:+v[3]};
+ }).filter(x=>Number.isFinite(x.lat)&&Number.isFinite(x.lng)&&x.population>=100000);
+}
+
+async function load(){
+ const [csv,cn,tw]=await Promise.all([getText(CITY_URL),getJSON(CN_URL),getJSON(TW_URL)]);
+ const raw=parseCSV(csv);
+ // Keep points whose coordinates fall inside mainland China or Taiwan.
+ // This avoids relying on a country column in the compact city CSV.
+ const cnFeatures=cn.features||[];
+ const twGeo=tw.objects?.nation ? topojson.feature(tw,tw.objects.nation) : null;
+ // Taiwan atlas is TopoJSON. Load topojson-client lazily if necessary.
+ return {raw,cn,tw};
+}
+
+function build(data){
+ // Convert Taiwan TopoJSON using a tiny dependency-free conversion fallback:
+ // for this prototype, also try the public GeoJSON version if available.
+ const cn=data.cn;
+ let twGeo=null;
+ if(data.tw?.type==="FeatureCollection")twGeo=data.tw;
+ else if(data.tw?.type==="Topology" && data.tw.objects?.nation){
+   // topojson-client is loaded below in the page only when needed
+ }
+ const allowed=data.raw.filter(c=>pointInFeature([c.lng,c.lat],cn)||(
+   c.lat>=21.8&&c.lat<=25.5&&c.lng>=119.2&&c.lng<=122.2
+ ));
+ // de-duplicate near-identical names/coordinates
+ const seen=new Set();
+ cities=allowed.filter(c=>{let k=c.name+"|"+c.lat.toFixed(3)+"|"+c.lng.toFixed(3);if(seen.has(k))return false;seen.add(k);return true});
+ render(cn);
+}
+
+function render(country){
+ const box=$("map"),w=box.clientWidth,h=box.clientHeight;
+ d3.select(box).select("svg").remove();
+ svg=d3.select(box).append("svg").attr("viewBox",`0 0 ${w} ${h}`);
+ root=svg.append("g");
+ projection=d3.geoMercator().fitExtent([[25,25],[w-25,h-25]],country);
+ path=d3.geoPath(projection);
+
+ // mask outside China/Taiwan. The country outline from cn-atlas is used for the
+ // mainland; Taiwan city points are allowed in this prototype and their cells
+ // are still clipped by the viewport. A later data pass can replace this with
+ // an exact Taiwan outline.
+ const defs=svg.append("defs");
+ const mask=defs.append("mask").attr("id","chinaMask");
+ mask.append("rect").attr("x",0).attr("y",0).attr("width",w).attr("height",h).attr("fill","black");
+ mask.selectAll("path").data(country.features).join("path").attr("d",path).attr("fill","white");
+
+ const layer=root.append("g").attr("mask","url(#chinaMask)");
+ const pts=cities.map(c=>projection([c.lng,c.lat]));
+ const delaunay=d3.Delaunay.from(pts);
+ const vor=delaunay.voronoi([0,0,w,h]);
+
+ layer.selectAll("path.citycell").data(cities).join("path")
+   .attr("class",c=>"citycell "+(statuses[key(c)]||""))
+   .attr("d",(c,i)=>vor.renderCell(i))
+   .attr("data-key",key)
+   .on("click",(e,c)=>openPopup(e,c));
+
+ // City labels — only show all labels at high enough zoom; top population cities
+ // remain visible at the base zoom.
+ layer.selectAll("text.label").data(cities.filter(c=>c.population>=500000)).join("text")
+   .attr("class","label")
+   .attr("x",c=>projection([c.lng,c.lat])[0])
+   .attr("y",c=>projection([c.lng,c.lat])[1]+3)
+   .text(c=>c.name);
+
+ layer.selectAll("circle.citydot").data(cities).join("circle")
+   .attr("class","citydot").attr("cx",c=>projection([c.lng,c.lat])[0]).attr("cy",c=>projection([c.lng,c.lat])[1]).attr("r",1.4);
+
+ root.append("g").selectAll("path.country").data(country.features).join("path").attr("class","country").attr("d",path);
+
+ zoom=d3.zoom().scaleExtent([.7,12]).on("zoom",e=>{
+   root.attr("transform",e.transform);
+   const k=e.transform.k;
+   layer.selectAll(".label").style("display",d=>k>1.45||d.population>=1500000?"":"none");
+ });
+ svg.call(zoom).on("mousedown",()=>svg.classed("dragging",true)).on("mouseup",()=>svg.classed("dragging",false));
+ svg.on("click",e=>{if(e.target.tagName==="svg")closePopup()});
+ stats();
+}
+
+function key(c){return c.name+"|"+c.lat.toFixed(4)+"|"+c.lng.toFixed(4)}
+function openPopup(e,c){
+ selected=c;$("pn").textContent=c.name;$("pm").textContent="Population: "+c.population.toLocaleString();
+ const r=$("map").getBoundingClientRect();let x=e.clientX-r.left+12,y=e.clientY-r.top+12;
+ x=Math.min(Math.max(10,x),r.width-240);y=Math.min(Math.max(10,y),r.height-230);
+ $("popup").style.left=x+"px";$("popup").style.top=y+"px";$("popup").classList.remove("hidden");
+}
+function closePopup(){$("popup").classList.add("hidden");selected=null}
+$("popup").addEventListener("click",e=>{
+ let b=e.target.closest("button");if(!b||!selected)return;
+ let k=key(selected); if(b.dataset.s==="clear")delete statuses[k]; else statuses[k]=b.dataset.s;
+ save(); closePopup();
+ d3.select(`path.citycell[data-key="${CSS.escape(k)}"]`).attr("class","citycell "+(statuses[k]||""));
+});
+$("search").addEventListener("input",e=>{
+ let q=e.target.value.toLowerCase().trim();
+ d3.selectAll(".citycell").attr("opacity",c=>{
+   let key=c.properties?.name;
+   return 1
+ });
+ d3.selectAll("path.citycell").attr("opacity",function(){
+   let c=d3.select(this).datum();return !q||c.name.toLowerCase().includes(q)?"1":".12"
+ });
+});
+window.addEventListener("resize",()=>{if(cities.length)render({type:"FeatureCollection",features:[...window.__country.features]})});
+
+(async()=>{
+ try{
+   const [csv,cn,twTopo]=await Promise.all([getText(CITY_URL),getJSON(CN_URL),getJSON(TW_URL)]);
+   const raw=parseCSV(csv);
+   const tw=topojson.feature(twTopo,twTopo.objects.nation);
+   const country={type:"FeatureCollection",features:[...cn.features,...tw.features]};
+   const allowed=raw.filter(c=>pointInFeature([c.lng,c.lat],country));
+   const seen=new Set();
+   cities=allowed.filter(c=>{let k=key(c);if(seen.has(k))return false;seen.add(k);return true});
+   window.__country=country;
+   render(country);
+   $("loading").classList.add("hide");
+ }catch(err){
+   console.error(err);
+   $("loading").innerHTML="<div style='max-width:520px;text-align:center;padding:25px'><b>Could not load the static datasets.</b><br><br>This prototype uses static GitHub/JSDelivr-hosted datasets rather than the previous GeoJSON.CN API.<br><br><small>"+String(err.message||err)+"</small></div>";
+ }
+})();
+</script>
+</body>
+</html>
